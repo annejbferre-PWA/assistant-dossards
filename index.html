@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Assistant Dossards</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#0f172a;background:#eef2f7}
+*{box-sizing:border-box}body{margin:0;background:#eef2f7}button,input{font:inherit}
+.app{max-width:760px;margin:auto;padding:14px 14px 34px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0 12px}
+h1{font-size:24px;margin:0}.muted{color:#64748b;font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}button,.file-label{border:0;border-radius:12px;padding:11px 13px;font-weight:700;cursor:pointer}
+.secondary{background:white;border:1px solid #dbe2ea;color:#0f172a}.primary{background:#0f172a;color:white}
+.search{display:flex;gap:9px;position:sticky;top:0;z-index:4;background:#eef2f7;padding:8px 0 10px}
+.search input{flex:1;min-width:0;background:white;border:2px solid #cbd5e1;border-radius:16px;padding:15px;font-size:26px;font-weight:650;outline:0}
+.search input:focus{border-color:#0f172a}.search button{padding:0 18px;background:#0f172a;color:white;border-radius:16px}
+.notice{padding:10px 12px;background:#e2e8f0;border-radius:12px;color:#475569;font-size:13px;margin-bottom:10px}
+.card{background:white;border-radius:22px;padding:20px;box-shadow:0 5px 22px rgba(15,23,42,.08)}
+.bib{font-size:58px;font-weight:850;line-height:1}.team{font-size:25px;font-weight:800;margin-top:5px}.meta{color:#64748b;margin-top:5px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:18px}.cell{border:1px solid #e2e8f0;border-radius:14px;padding:12px}
+.label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}.value{font-weight:700;margin-top:4px;word-break:break-word}
+.splits{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}.split{background:#f8fafc;border-radius:14px;padding:13px;text-align:center}.split strong{display:block;font-size:20px;margin-top:4px}
+.section{margin-top:18px}.section h2{font-size:15px;margin:0 0 7px}.members{line-height:1.55}
+.empty{background:white;border-radius:20px;padding:32px 15px;text-align:center;color:#64748b}
+.history{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 14px}.history button{background:white;border:1px solid #dbe2ea;padding:8px 11px;border-radius:10px}
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:flex-end;justify-content:center;z-index:10}
+.modal.open{display:flex}.sheet{background:white;width:100%;max-width:760px;border-radius:24px 24px 0 0;padding:20px 16px 26px}
+.sheet h2{margin:0 0 8px}.sheet-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid #e2e8f0}
+input[type=file]{display:none}
+.speaker{background:#020617;color:white;min-height:360px;border-radius:22px;padding:28px 20px;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.speaker .big{font-size:80px;font-weight:900;line-height:.95}.speaker .name{font-size:30px;font-weight:800;margin-top:16px}.speaker .small{font-size:18px;color:#cbd5e1;margin-top:8px}
+@media(max-width:520px){.grid{grid-template-columns:1fr}.splits{grid-template-columns:1fr 1fr}.split:last-child{grid-column:span 2}.actions button,.actions label{font-size:12px;padding:9px}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="top">
+    <div><h1>Assistant Dossards</h1><div class="muted" id="dataset">Chargement…</div></div>
+    <div class="actions">
+      <label class="file-label primary" for="excel">Importer Excel</label>
+      <input id="excel" type="file" accept=".xlsx,.xls,.xlsm,.csv">
+      <button class="secondary" id="speakerBtn" type="button">Mode speaker</button>
+    </div>
+  </div>
+
+  <div class="notice">Le fichier est traité <strong>sur le téléphone</strong>. Il n’est pas envoyé sur un serveur.</div>
+
+  <form class="search" id="form">
+    <input id="bib" inputmode="numeric" autocomplete="off" placeholder="N° de dossard" aria-label="Numéro de dossard">
+    <button type="submit">OK</button>
+  </form>
+  <div class="history" id="history"></div>
+  <div class="muted" id="status" aria-live="polite">Entrez un numéro de dossard.</div>
+  <div id="result"></div>
+
+  <div style="margin-top:18px;display:flex;gap:8px;justify-content:center">
+    <button class="secondary" id="settingsBtn" type="button">Gestion des données</button>
+    <button class="secondary" id="installBtn" type="button" hidden>Installer l'app</button>
+  </div>
+</div>
+
+<div class="modal" id="modal" aria-hidden="true">
+  <div class="sheet">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2>Gestion des données</h2><button class="secondary" id="closeModal" type="button">Fermer</button>
+    </div>
+    <p class="muted">Importe le fichier de la course. L'app mémorise le dernier fichier dans le navigateur.</p>
+    <div class="sheet-row"><span>Dossards chargés</span><strong id="count">0</strong></div>
+    <div class="sheet-row"><span>Dernier import</span><strong id="date">—</strong></div>
+    <div class="sheet-row"><span>Source</span><strong id="source">—</strong></div>
+    <button class="secondary" id="reset" type="button" style="margin-top:16px;width:100%">Effacer les données enregistrées</button>
+  </div>
+</div>
+
+<div class="modal" id="speakerModal" aria-hidden="true">
+  <div class="sheet" style="background:#020617;color:white">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2>Mode speaker</h2><button class="secondary" id="closeSpeaker" type="button">Fermer</button>
+    </div>
+    <div id="speakerResult" class="speaker" style="margin-top:12px">
+      <div class="muted">Recherchez un dossard</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_DATA=[{"dossard":"66","place":"21","equipe":"FLCVT85-1-CADETS","total":"01:39:36","moyenne":"15.512","licence":"B70079C0230554MCAFRA","equipiers":"FRUCHARD/LECOCQ/RENAUD/BIRAUD/HENRY ","sexe":"M","categorie":"CA","classement_categorie":"1","nationalite":"FRA","t1":"00:01:47","velo":"00:49:37","t2":"00:01:07"},{"dossard":"6","place":"1","equipe":"LES INTELLOS","total":"01:13:07","moyenne":"21.131","licence":"A25755C0020865MS4FRA","equipiers":"IDRIS/LONGEARD/PALVADEAU ","sexe":"M","categorie":"SE","classement_categorie":"1","nationalite":"FRA","t1":"00:01:03","velo":"00:38:09","t2":"00:00:46"},{"dossard":"71","place":"3","equipe":"LA FUSÉE CESTADAISE","total":"01:17:07","moyenne":"20.035","licence":"A48253C0020431MS3FRA","equipiers":"LALANNE/CREQUY/LAMARQUE/FONTAINE ERMEL ","sexe":"M","categorie":"SE","classement_categorie":"2","nationalite":"FRA","t1":"00:01:24","velo":"00:39:29","t2":"00:00:51"},{"dossard":"76","place":"5","equipe":"LES ENCLUMES","total":"01:20:09","moyenne":"19.276","licence":"","equipiers":"VALENTIN/MICHAUD/BEGUEC ","sexe":"M","categorie":"SE","classement_categorie":"3","nationalite":"FRA","t1":"00:01:29","velo":"00:40:04","t2":"00:00:55"},{"dossard":"26","place":"8","equipe":"LA ROCHELLE TRIATHLON","total":"01:24:24","moyenne":"18.306","licence":"B05486C0020485MS3FRA","equipiers":"CHEKROUN/HASNAOUI/PARISON/RIVALLAND/AMARI ","sexe":"M","categorie":"SE","classement_categorie":"4","nationalite":"FRA","t1":"00:03:30","velo":"00:42:11","t2":"00:01:37"},{"dossard":"61","place":"9","equipe":"BURGERS","total":"01:24:36","moyenne":"18.262","licence":"","equipiers":"RIPOCHE/STEINER/PROUTEAU ","sexe":"M","categorie":"SE","classement_categorie":"5","nationalite":"FRA","t1":"00:01:06","velo":"00:43:07","t2":"00:00:53"},{"dossard":"31","place":"12","equipe":"LES INTELLOS BIS","total":"01:29:03","moyenne":"17.350","licence":"A93386C0020865MV1FRA","equipiers":"MOURLANNE/LAMARE/COUPART/MAUNY/BRUT ","sexe":"M","categorie":"SE","classement_categorie":"6","nationalite":"FRA","t1":"00:01:56","velo":"00:43:31","t2":"00:01:13"},{"dossard":"41","place":"15","equipe":"LE TGV CESTADAIS","total":"01:31:17","moyenne":"16.925","licence":"A58621C0020431MV5FRA","equipiers":"BIZZARI/RUELLE/LETELLIER/REY/BESSONNEAU ","sexe":"M","categorie":"SE","classement_categorie":"7","nationalite":"FRA","t1":"00:02:44","velo":"00:44:35","t2":"00:01:16"},{"dossard":"36","place":"16","equipe":"FLCVT85-4-SENIORS HOMMES","total":"01:31:23","moyenne":"16.907","licence":"A31038C0230554MS1FRA","equipiers":"DEVAUX/BOUE/VAY/ARHIMAN/RENAUD ","sexe":"M","categorie":"SE","classement_categorie":"8","nationalite":"FRA","t1":"00:01:52","velo":"00:47:06","t2":"00:01:39"},{"dossard":"86","place":"32","equipe":"POURQUOI ON FAIT ÇA ?","total":"01:56:26","moyenne":"13.269","licence":"","equipiers":"CHAUMARTIN/FORTIN/MARCUCCINI ","sexe":"M","categorie":"SE","classement_categorie":"9","nationalite":"FRA","t1":"00:02:44","velo":"00:59:00","t2":"00:01:33"},{"dossard":"91","place":"33","equipe":"ILS SE SONT ÉCHAPPÉS","total":"01:58:47","moyenne":"13.007","licence":"B34548C0020489MV3FRA","equipiers":"PINTO DA SILVA/LAFAYSSE/HARDY/GIRAUD/DESMARAIS ","sexe":"M","categorie":"SE","classement_categorie":"10","nationalite":"FRA","t1":"00:03:39","velo":"00:55:15","t2":"00:02:29"},{"dossard":"51","place":"DSQ","equipe":"LES IMPOSTEURS","total":"00:00:00","moyenne":"0","licence":"","equipiers":"AUGUIN/BLANCHARD/KOPP ","sexe":"M","categorie":"SE","classement_categorie":"-","nationalite":"FRA","t1":"00:00:00","velo":"00:00:00","t2":"00:00:00"},{"dossard":"21","place":"4","equipe":"FLCVT85-5-MASTERS HOMMES","total":"01:17:52","moyenne":"19.842","licence":"A31014C0230554MV3FRA","equipiers":"FLOZE/LAMARCHE/BOUZIANI/RAGOT/PAILLAT ","sexe":"M","categorie":"VE","classement_categorie":"1","nationalite":"FRA","t1":"00:01:29","velo":"00:39:30","t2":"00:01:07"},{"dossard":"11","place":"6","equipe":"FLCVT85-6-MASTERS HOMMES","total":"01:22:50","moyenne":"18.652","licence":"A31007C0230554MV5FRA","equipiers":"DEVAUX/DEHAUD/SOUCHET/SKAKNI/JOVANOVIC ","sexe":"M","categorie":"VE","classement_categorie":"2","nationalite":"FRA","t1":"00:01:07","velo":"00:41:28","t2":"00:01:01"},{"dossard":"46","place":"13","equipe":"FLCVT85-7-MASTERS HOMMES","total":"01:29:28","moyenne":"17.269","licence":"A49794C0230554MV2FRA","equipiers":"GUILLEMET/LECOCQ/LECOCQ/OLLIER/ZOBDA ","sexe":"M","categorie":"VE","classement_categorie":"3","nationalite":"FRA","t1":"00:01:58","velo":"00:43:05","t2":"00:01:28"},{"dossard":"16","place":"14","equipe":"THS","total":"01:31:08","moyenne":"16.953","licence":"B32969C0020488MV4FRA","equipiers":"FAURE/SANDEAU/CAMILLERI ","sexe":"M","categorie":"VE","classement_categorie":"4","nationalite":"FRA","t1":"00:01:49","velo":"00:44:59","t2":"00:01:01"},{"dossard":"56","place":"17","equipe":"FLCVT85-8-MASTERS HOMMES","total":"01:32:51","moyenne":"16.640","licence":"B13880C0230554MV3FRA","equipiers":"VERGNAUD/ARNAUD/HENRY/BOURREAU/VAUTOUR ","sexe":"M","categorie":"VE","classement_categorie":"5","nationalite":"FRA","t1":"00:04:12","velo":"00:44:38","t2":"00:01:23"},{"dossard":"81","place":"20","equipe":"FLCVT85-9-MASTERS HOMMES","total":"01:34:31","moyenne":"16.346","licence":"A49689C0230554MV5FRA","equipiers":"HERBE/JAUNET/FERRE/CARRIERE/GOGUET ","sexe":"M","categorie":"VE","classement_categorie":"6","nationalite":"FRA","t1":"00:02:52","velo":"00:45:38","t2":"00:01:41"},{"dossard":"151","place":"11","equipe":"LA ROCHELLE TRIATHLON TRIPOUF","total":"01:27:26","moyenne":"17.671","licence":"B36440C0020485FS2FRA","equipiers":"VALLEE/METAIS/PAULY/REGNIER/VIGE ","sexe":"F","categorie":"SE","classement_categorie":"1","nationalite":"FRA","t1":"00:01:22","velo":"00:45:37","t2":"00:01:00"},{"dossard":"156","place":"24","equipe":"SAINTES TRIATHLON GIRLS ONLY","total":"01:42:55","moyenne":"15.012","licence":"B08683C0020489FV2FRA","equipiers":"MARS/GILLON/DELALANDE/SABELLE-CRAIG ","sexe":"F","categorie":"SE","classement_categorie":"2","nationalite":"FRA","t1":"00:01:52","velo":"00:51:19","t2":"00:01:33"},{"dossard":"166","place":"25","equipe":"LES ADORABLES !!","total":"01:43:00","moyenne":"15.000","licence":"B30383C0020489FV1FRA","equipiers":"BRUNI/FRIOU/GRILLET ","sexe":"F","categorie":"SE","classement_categorie":"3","nationalite":"FRA","t1":"00:01:44","velo":"00:52:37","t2":"00:01:12"},{"dossard":"161","place":"27","equipe":"FLCVT85-2-SENIORS FEMMES","total":"01:47:35","moyenne":"14.361","licence":"A85278C0230554FV2FRA","equipiers":"GUILLEMET/EVANGELISTA/GUICHETEAU/TONNELIER/LAURENT ","sexe":"F","categorie":"SE","classement_categorie":"4","nationalite":"FRA","t1":"00:02:21","velo":"00:54:23","t2":"00:01:32"},{"dossard":"171","place":"28","equipe":"C'EST L'HEURE DE LA REVANCHE !","total":"01:47:52","moyenne":"14.323","licence":"","equipiers":"ROUMILHAC/MENARD/GAS/DESCAMPS ","sexe":"F","categorie":"VE","classement_categorie":"1","nationalite":"FRA","t1":"00:01:34","velo":"00:53:53","t2":"00:01:19"},{"dossard":"1","place":"2","equipe":"FLCVT85-3-SENIORS MIXTES","total":"01:15:42","moyenne":"20.410","licence":"B10332C0230554FV2FRA","equipiers":"BRABANT/COUE/COUE/ROY/DEHAUD ","sexe":"X","categorie":"SE","classement_categorie":"1","nationalite":"FRA","t1":"00:00:55","velo":"00:39:31","t2":"00:00:48"},{"dossard":"136","place":"7","equipe":"LES TRI-CAC-LÈTES","total":"01:24:16","moyenne":"18.335","licence":"B60753C0020481FS3FRA","equipiers":"PIERRET/PERROGON/LABOILE/FOUCAUD/TOSY ","sexe":"X","categorie":"SE","classement_categorie":"2","nationalite":"FRA","t1":"00:01:51","velo":"00:41:52","t2":"00:01:21"},{"dossard":"96","place":"18","equipe":"LES TRITONS MOUSQUETAIRES","total":"01:33:47","moyenne":"16.474","licence":"","equipiers":"LACROIX/FLORENT/GABORIT/PICHONNIER/MENONCELLO ","sexe":"X","categorie":"SE","classement_categorie":"3","nationalite":"FRA","t1":"00:01:55","velo":"00:45:29","t2":"00:01:21"},{"dossard":"141","place":"19","equipe":"PRIV’S FAMILY","total":"01:34:27","moyenne":"16.358","licence":"A63295C0020445MCAFR","equipiers":"PRIVAT/PRIVAT/PRIVAT ","sexe":"X","categorie":"SE","classement_categorie":"4","nationalite":"FRA","t1":"00:00:50","velo":"00:47:37","t2":"00:00:36"},{"dossard":"106","place":"22","equipe":"LA ROCHELLE TRIATHLON TOUJOURS LA AVEC LE SOURIRE","total":"01:40:03","moyenne":"15.442","licence":"A26352C0020485MV3FRA","equipiers":"MEYER/MEYER/MARECHAL/DELAVAUD/CHARRON ","sexe":"X","categorie":"SE","classement_categorie":"5","nationalite":"FRA","t1":"00:01:47","velo":"00:48:24","t2":"00:01:17"},{"dossard":"126","place":"23","equipe":"TEAM ANGERIEN","total":"01:40:32","moyenne":"15.368","licence":"","equipiers":"TANGUY/ROY/CLARKE/BONNEAU ","sexe":"X","categorie":"SE","classement_categorie":"6","nationalite":"FRA","t1":"00:01:46","velo":"00:49:43","t2":"00:01:33"},{"dossard":"101","place":"26","equipe":"#TEAMKIFFANCE","total":"01:44:01","moyenne":"14.853","licence":"A79971C0020489FS4FRA","equipiers":"PHELIPOT/NIORT/NIORT ","sexe":"X","categorie":"SE","classement_categorie":"7","nationalite":"FRA","t1":"00:01:44","velo":"00:51:35","t2":"00:01:28"},{"dossard":"121","place":"29","equipe":"LES CAGOUILLES DE HAUTE SAINTONGE","total":"01:49:28","moyenne":"14.114","licence":"A49943C0020488FV5FRA","equipiers":"LANDRY/LANDRY/AVRIL/AVRIL ","sexe":"X","categorie":"SE","classement_categorie":"8","nationalite":"FRA","t1":"00:03:29","velo":"00:53:32","t2":"00:01:48"},{"dossard":"146","place":"30","equipe":"COURIR A COGNAC","total":"01:53:28","moyenne":"13.616","licence":"","equipiers":"RETHORE/ALEXANDER/DUSSAUZE/VALLET ","sexe":"X","categorie":"SE","classement_categorie":"9","nationalite":"FRA","t1":"00:02:30","velo":"00:56:55","t2":"00:01:27"},{"dossard":"111","place":"31","equipe":"POMPIER DE COGNAC","total":"01:55:27","moyenne":"13.382","licence":"","equipiers":"BARDIN/MAGNE/COURSIERES/BERVILLIER/LECHARBONNIER ","sexe":"X","categorie":"SE","classement_categorie":"10","nationalite":"FRA","t1":"00:03:30","velo":"00:57:14","t2":"00:01:38"},{"dossard":"131","place":"34","equipe":"ARTHUR ET SES DRÔLES DE DAMES","total":"02:01:13","moyenne":"12.746","licence":"","equipiers":"DUMAS DE LA ROQUE/TRAIN/MUNIZ/LAFAYSSE ","sexe":"X","categorie":"SE","classement_categorie":"11","nationalite":"FRA","t1":"00:02:31","velo":"01:00:49","t2":"00:01:17"},{"dossard":"116","place":"10","equipe":"A L'ARRACHE !!","total":"01:25:07","moyenne":"18.152","licence":"A27007C0020489MV2FRA","equipiers":"DUPOUTS/DEMATTE/DANTONNY/VIGIER/SIBILLE ","sexe":"X","categorie":"VE","classement_categorie":"1","nationalite":"FRA","t1":"00:01:33","velo":"00:43:20","t2":"00:01:10"}];
+const DB_NAME='assistant-dossards-v2', STORE='config';
+let data=[...DEFAULT_DATA], byBib=new Map(), current=null, deferredInstall=null;
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+function rebuild(){byBib=new Map(data.map(r=>[String(r.dossard).trim(),r]));$('dataset').textContent=data.length+' dossards • données locales';$('count').textContent=data.length;}
+function openDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=()=>r.result.createObjectStore(STORE);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+async function saveData(meta='Import Excel'){const db=await openDB();const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put({data,meta,date:new Date().toISOString()},'dataset');return new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}
+async function loadData(){try{const db=await openDB();const tx=db.transaction(STORE,'readonly');const r=tx.objectStore(STORE).get('dataset');r.onsuccess=()=>{if(r.result?.data?.length){data=r.result.data;rebuild();$('date').textContent=new Date(r.result.date).toLocaleString('fr-FR');$('source').textContent=r.result.meta||'Import Excel'}}}catch(e){}}
+function norm(v){return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()}
+function detectHeader(rows){for(let i=0;i<Math.min(rows.length,20);i++){const s=rows[i].map(norm).join('|');if(s.includes('dossard')||s.includes('n° dossard')||s.includes('no dossard'))return i}return 0}
+function findCol(headers, words){for(let i=0;i<headers.length;i++){const h=norm(headers[i]);if(words.some(w=>h===w||h.includes(w)))return i}return -1}
+function timeVal(v){if(v==null||v==='')return '';if(typeof v==='number' && v<1){const total=Math.round(v*86400);const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=total%60;return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}return String(v)}
+async function importExcel(file){if(!window.XLSX){alert('Le module Excel n’est pas disponible. Rechargez l’application une fois avec Internet.');return}
+  const buf=await file.arrayBuffer(), wb=XLSX.read(buf,{type:'array',cellDates:true});
+  const ws=wb.Sheets[wb.SheetNames[0]], rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  const hi=detectHeader(rows), headers=rows[hi].map(x=>String(x??'')), d=findCol(headers,['dossard','bib','numero de dossard']);
+  if(d<0){alert('Je ne trouve pas de colonne Dossard dans la première feuille.');return}
+  const cols={equipe:findCol(headers,['equipe','équipe']),licence:findCol(headers,['licence']),equipiers:findCol(headers,['equipiers','équipiers']),sexe:findCol(headers,['sexe']),categorie:findCol(headers,['categorie','catégorie']),place:findCol(headers,['place','classement']),classement_categorie:findCol(headers,['classement categorie','classement catégorie']),nationalite:findCol(headers,['nationalite','nationalité']),total:findCol(headers,['temps total','total']),moyenne:findCol(headers,['moyenne']),t1:findCol(headers,['t1']),velo:findCol(headers,['velo','vélo']),t2:findCol(headers,['t2'])};
+  const out=[]; for(let i=hi+1;i<rows.length;i++){const r=rows[i];let bib=r[d];if(bib===''||bib==null)continue;if(typeof bib==='number')bib=String(Math.trunc(bib));else bib=String(bib).trim();if(!/^\d+$/.test(bib))continue;const get=k=>cols[k]>=0?r[cols[k]]:'';out.push({dossard:bib,place:get('place'),equipe:get('equipe'),total:timeVal(get('total')),moyenne:get('moyenne'),licence:get('licence'),equipiers:get('equipiers'),sexe:get('sexe'),categorie:get('categorie'),classement_categorie:get('classement_categorie'),nationalite:get('nationalite'),t1:timeVal(get('t1')),velo:timeVal(get('velo')),t2:timeVal(get('t2'))})}
+  if(!out.length){alert('Aucun dossard exploitable trouvé.');return} data=out;rebuild();await saveData(file.name);$('date').textContent=new Date().toLocaleString('fr-FR');$('source').textContent=file.name;show(data[0].dossard);$('status').textContent=out.length+' dossards importés depuis '+file.name;
+}
+function addHistory(bib){let a=JSON.parse(sessionStorage.getItem('hist')||'[]');a=[bib,...a.filter(x=>x!==bib)].slice(0,8);sessionStorage.setItem('hist',JSON.stringify(a));renderHistory()}
+function renderHistory(){const a=JSON.parse(sessionStorage.getItem('hist')||'[]');$('history').innerHTML=a.map(x=>`<button type="button" data-bib="${esc(x)}">${esc(x)}</button>`).join('');$('history').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.bib)))}
+function show(q){q=String(q).trim();if(!q) return;const r=byBib.get(q);if(!r){$('status').textContent='Dossard '+q+' introuvable';$('result').innerHTML='<div class="empty">Aucun coureur trouvé.</div>';return}current=r;$('bib').value=q;$('status').textContent='Dossard trouvé';addHistory(q);
+ $('result').innerHTML=`<article class="card"><div class="bib">${esc(r.dossard)}</div><div class="team">${esc(r.equipe||'Coureur individuel')}</div><div class="meta">${esc(r.sexe)} • ${esc(r.categorie)} • ${esc(r.nationalite)}</div>
+ <div class="grid"><div class="cell"><div class="label">Équipiers</div><div class="value">${esc(r.equipiers||'—')}</div></div><div class="cell"><div class="label">Classement</div><div class="value">${esc(r.place||'—')} · Cat. ${esc(r.classement_categorie||'—')}</div></div><div class="cell"><div class="label">Temps total</div><div class="value">${esc(r.total||'—')}</div></div><div class="cell"><div class="label">Moyenne</div><div class="value">${esc(r.moyenne||'—')}</div></div></div>
+ <div class="section"><h2>Chronos</h2><div class="splits"><div class="split">T1<strong>${esc(r.t1||'—')}</strong></div><div class="split">Vélo<strong>${esc(r.velo||'—')}</strong></div><div class="split">T2<strong>${esc(r.t2||'—')}</strong></div></div></div>
+ <div class="section"><div class="label">Licence</div><div class="value">${esc(r.licence||'—')}</div></div></article>`;
+ renderSpeaker(r);
+}
+function renderSpeaker(r){$('speakerResult').innerHTML=`<div class="big">${esc(r.dossard)}</div><div class="name">${esc(r.equipe||'Coureur individuel')}</div><div class="small">${esc(r.equipiers||'')}<br>${esc(r.categorie||'')}</div>`}
+$('form').addEventListener('submit',e=>{e.preventDefault();show($('bib').value);$('bib').select()});
+$('excel').addEventListener('change',e=>{if(e.target.files[0])importExcel(e.target.files[0]);e.target.value=''});
+$('speakerBtn').addEventListener('click',()=>{$('speakerModal').classList.add('open');$('speakerModal').setAttribute('aria-hidden','false');if(current)renderSpeaker(current)});
+$('closeSpeaker').addEventListener('click',()=>{$('speakerModal').classList.remove('open')});
+$('settingsBtn').addEventListener('click',()=>{$('modal').classList.add('open');$('modal').setAttribute('aria-hidden','false')});
+$('closeModal').addEventListener('click',()=>{$('modal').classList.remove('open')});
+$('reset').addEventListener('click',async()=>{if(confirm('Effacer le fichier enregistré ?')){const db=await openDB();const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete('dataset');data=[...DEFAULT_DATA];rebuild();$('modal').classList.remove('open');}});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('installBtn').hidden=false});
+$('installBtn').addEventListener('click',async()=>{if(!deferredInstall)return;deferredInstall.prompt();deferredInstall=null});
+window.addEventListener('appinstalled',()=>{$('installBtn').hidden=true});
+rebuild();renderHistory();loadData();
+if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+</script>
+</body></html>
